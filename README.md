@@ -7,7 +7,7 @@ English | [中文](README_ZH.md)
 ![CS](https://img.shields.io/badge/CS-GeoAI-blue)
 ![RS](https://img.shields.io/badge/Remote%20Sensing-LST-blueviolet)
 
-High-resolution land surface temperature (LST) forecasting pipeline that fuses MODIS and Landsat products, boosts spatial detail with machine learning, and ships ready-to-publish diagnostics.
+High-resolution land surface temperature (LST) prediction method that fuses MODIS and Landsat products, boosts spatial detail with machine learning, and ships ready-to-publish diagnostics.
 
 ---
 
@@ -80,12 +80,12 @@ This project contains multiple quality verification functions; for example, QA f
 
 This comparison highlights how the trained models upsample MODIS-scale inputs into detail-rich 30 m products, visually verifying the value of prediction methods.
 
-## 🛡️ License & Attribution
-- Code is released under the Apache License 2.0 **with** the additional patent notice contained in `LICENSE`. Commercial redistribution requires written permission from Anhui Agricultural University.
-- Cite the authorship note in `LICENSE` when sharing derived models or figures.
-
 ## 📝 Notes
 - Paths and parameter names remain hard-coded to `F:/MyProjects/MachineLearning/Data`; audit each script before running on a different platform.
 - Several routines expect month-sorted filenames (`Predict_LST_MM.tif`, `_QA_Usable.tif`, etc.); inconsistent naming can silently break batching.
 - GPU-heavy scripts (`XGBoost.py`, `Transformer.py`) assume CUDA-capable hardware and may fail if drivers or memory limits are insufficient.
 - GDAL-based preprocessing writes intermediate files in-place—ensure you have backups before rerunning on shared directories.
+
+## 🛡️ License & Attribution
+- Code is released under the Apache License 2.0 **with** the additional patent notice contained in `LICENSE`. Commercial redistribution requires written permission from Anhui Agricultural University.
+- Cite the authorship note in `LICENSE` when sharing derived models or figures.

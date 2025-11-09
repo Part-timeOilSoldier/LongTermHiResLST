@@ -7,7 +7,7 @@
 ![CS](https://img.shields.io/badge/CS-GeoAI-blue)
 ![RS](https://img.shields.io/badge/Remote%20Sensing-LST-blueviolet)
 
-🛰️ 高分辨率地表温度（LST）预测流水线：融合 MODIS 与 Landsat 产品，通过机器学习增强空间细节，并输出可直接用于发表的图表与指标。
+🛰️ 高分辨率地表温度（LST）预测方法：融合 MODIS 与 Landsat 产品，通过机器学习增强空间细节，并输出可直接用于发表的图表与指标。
 
 ---
 
@@ -80,12 +80,12 @@
 
 该图展示训练后的模型如何将 990 m MODIS 输入上采样为 30 m 细节，直观验证预测方法的价值。
 
-## 🛡️ 许可证
-- 代码遵循 Apache License 2.0，并受 `LICENSE` 中的安徽农业大学专利声明约束。商业再分发需获得书面许可。
-- 复用图件或模型时请引用 `LICENSE` 中的署名说明。
-
 ## 📝 注意事项
 - 路径与参数名称多为 `F:/MyProjects/MachineLearning/Data` 的硬编码版本，迁移前需全面检查。
 - 多数脚本依赖按月份排序的文件名（`Predict_LST_MM.tif`、`_QA_Usable.tif` 等）；命名不一致会导致批处理失败。
 - GPU 密集型脚本（`XGBoost.py`、`Transformer.py`）需要 CUDA 设备与足够显存，驱动或显存不足会报错。
 - GDAL 预处理会在原地生成临时文件，重复运行前请备份共享目录。
+
+## 🛡️ 许可证
+- 代码遵循 Apache License 2.0，并受 `LICENSE` 中的安徽农业大学专利声明约束。商业再分发需获得书面许可。
+- 复用图件或模型时请引用 `LICENSE` 中的署名说明。
