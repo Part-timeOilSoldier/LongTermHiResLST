@@ -1,194 +1,107 @@
-# LongTermHiResLST
-> Long-Term High-Resolution Land Surface Temperature Reconstruction & Analysis Platform  
-> 长期高分辨率地表温度重建与分析平台
+﻿# LongTermHiResLST
 
-[![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://www.python.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
-[![Status](https://img.shields.io/badge/Status-Active-brightgreen.svg)]()
+![Python](https://img.shields.io/badge/python-3.11+-3776AB?logo=python&logoColor=white)
+![RasterIO](https://img.shields.io/badge/rasterio-%F0%9F%8C%90-green)
+![License](https://img.shields.io/badge/license-Apache--2.0-blue)
+![Status](https://img.shields.io/badge/status-active-success)
 
-## Table of Contents
-- [Overview](#overview)
-- [Highlights](#highlights)
-- [Repository Layout](#repository-layout)
-- [Data Prerequisites](#data-prerequisites)
-- [Environment Setup](#environment-setup)
-- [Configuration](#configuration)
-- [Workflow](#workflow)
-- [Validation & Diagnostics](#validation--diagnostics)
-- [Visualization & Reporting](#visualization--reporting)
-- [Outputs](#outputs)
-- [Troubleshooting & Tips](#troubleshooting--tips)
-- [Roadmap](#roadmap)
-- [License](#license)
+🛰️ High-resolution land surface temperature (LST) forecasting pipeline that fuses MODIS and Landsat products, boosts spatial detail with machine learning, and ships ready-to-publish diagnostics.
 
-## Overview
-LongTermHiResLST（Long-Term High-Resolution Land Surface Temperature）融合 MODIS、Landsat、NDVI 和土地利用类型数据，通过随机森林等机器学习模型重建 30 m LST，并提供年度趋势、气象对比与多维可视化分析。
+---
 
-```mermaid
-flowchart TD
-  A[MOD11A1 HDF] -->|Tool1.process_hdf_files| B[LST 1 km TIFF]
-  B -->|Reproject + Crop| C[LST 990 m]
-  D[Landsat B4/B5/B10] -->|Tool1.process_all_landsat| E[NDVI & LST 30 m]
-  F[Landcover] -->|Tool1.crop_type_data| G[Type 30 m]
-  H[Landsat QA] -->|Tool1.preprocessing_QA_folder| I[QA 30 m]
-  C & E & G -- Tool2.load_data_usable --> J[Training Samples]
-  J --> K[ML Models (RF/XGB/CatBoost/Transformer)]
-  K --> L[FullYearPre / FullYearPro]
-  L --> M[Diagnostics & Visualization]
-```
+## 🛰️ Overview
+- **Goal**: upscale daily MODIS LST (990 m) to 30 m resolution over long periods using vegetation (NDVI), land-use masks, and per-month regression models.
+- **Scope**: ingestion & cleanup of satellite products, QA masking, per-month Random Forest training/prediction, optional CatBoost/XGBoost/Transformer experiments, validation, and publication-ready figures.
+- **Outputs**: monthly 30 m prediction rasters, temporal statistics, accuracy plots, land-cover error studies, and composite storyboards (flowchart + 12‑month forecast + resolution comparison).
 
-## Highlights
-- Multi-source preprocessing toolkit (`LST_Tools/Tool1.py`) covering HDF extraction, reprojection, resampling, QA masking, and feature stacking.
-- Pluggable ML stack (`Training/`) with classic tree ensembles plus a PyTorch Transformer super-resolution prototype.
-- Monthly QA-aware training/prediction loop for long-term mosaics (`Training/Training_Usable.py`, `Preprocessing/FullYearPre.py`).
-- Validation suite: in situ QA filtering, Meteostat weather comparison, land-cover specific error analysis, cloud coverage studies.
-- Publication-ready visualization scripts (temperature mosaics, scatter fits, cloud–LST joint plots, land-cover boxplots).
+![Processing Flow](Visualization/flowchart.png)
 
-## Repository Layout
-```
-LongTermHiResLST/
-├── LST_Tools/
-│   ├── Tool1.py            # Raster utilities, HDF handling, QA processing, metrics plotting
-│   ├── Tool2.py            # Path helpers, dataset loaders, QA filtering and splitting
-├── Preprocessing/
-│   ├── ModisPreprocessing.py
-│   ├── LandsatPreprocessing.py
-│   ├── TypeProcessing.py
-│   ├── CloudCoverageProcessing.py
-│   ├── FullYearPro.py      # Full-year MODIS tiling, reprojection, resampling
-│   ├── FullYearPre.py      # Monthly prediction orchestrator
-│   ├── ValidatlyProcessing/ # Validation-specific scripts
-│   ├── ...others (CorrelationAnalysis, LCErrorAnalysis, YearTemAnalysis, etc.)
-├── Training/
-│   ├── RandomForest.py / Training_Usable.py / CatBoost.py / XGBoost.py / Transformer.py
-├── Visualization/
-│   ├── Visualization1.py / Visualization2.py / temperature_image.png
-├── LICENSE
-├── README.md (this file)
-```
-
-## Data Prerequisites
-| Dataset | Source | Native Resolution | Expected Location (default) | Notes |
-| --- | --- | --- | --- | --- |
-| MODIS MOD11A1 LST + QC | NASA LP DAAC | 1 km | `F:/MyProjects/MachineLearning/Data/Raw_Data/MOD11A1/` | Daily tiles; Tool1 extracts and mosaics. |
-| Landsat 8 B4/B5/B10 | USGS | 30 m | `.../Raw_Data/LandsatB4B5` & `.../LandsatB10` | Used for NDVI and reference LST. |
-| Land-use / LCD30 | e.g., GlobeLand30 | 30 m | `.../Raw_Data/Type2022` | Cropped to AOI. |
-| Landsat QA | Landsat QA band | 30 m | `.../Raw_Data/LandsatQA` | Used to mask clouds. |
-| Optional meteorological data | Meteostat API | Daily | fetched on demand | Needed for `YearTemAnalysis.py`. |
-
-> 所有路径在代码中默认为 Windows 盘符；如使用其他环境，请先调整配置。
-
-## Environment Setup
-1. **Python**: 3.9+ (GDAL wheels are most stable on CPython/conda).  
-2. **Core deps**: `numpy`, `pandas`, `rasterio`, `gdal`, `scikit-learn`, `seaborn`, `matplotlib`, `joblib`, `meteostat`, `plotly`, `cupy` (optional GPU KDE), `torch` (for Transformer).
-3. Example conda env:
-   ```bash
-   conda create -n lst python=3.10 gdal rasterio
-   conda activate lst
-   pip install numpy pandas scikit-learn seaborn matplotlib joblib meteostat plotly cupy-cuda12x torch torchvision torchaudio
-   ```
-4. Install GDAL-compatible Microsoft Visual C++ redistributables on Windows if needed.
-
-## Configuration
-- Update `LST_Tools/Tool2.py` (`path_set`, `predict_path_set`) to match your folder layout.
-- In preprocessing scripts (e.g., `ModisPreprocessing.py`, `LandsatPreprocessing.py`), adjust input/output dirs, `utm_coords`, and `size` to your AOI.
-- `FullYearPro.py` assumes tile naming conventions like `LSTYYYYDDD`. Confirm before batch runs.
-- GPU-only routines (Transformer, `cupy` KDE) require CUDA-capable hardware; guard them if running on CPU.
-
-## Workflow
-
-### 1. Preprocess Base Layers
-Run the scripts in the order below (modify paths first):
-
-```bash
-python Preprocessing/ModisPreprocessing.py        # MODIS LST extraction → 990 m → 30 m
-python Preprocessing/LandsatPreprocessing.py      # NDVI & 30 m reference LST
-python Preprocessing/TypeProcessing.py            # Land-cover clip
-python Preprocessing/CloudCoverageProcessing.py   # QA masks
-```
-
-Key operations handled inside `LST_Tools/Tool1.py`:
-- HDF extraction (`process_hdf_files`, `extract_tiff`)
-- Radiometric scaling & reprojection (`process_modis_lst_data`, `reproject_folder`)
-- Resampling/cropping (`crop_raster`, `resample_lst_to_30m`, `crop_type_data`)
-- QA normalization (`preprocessing_QA_folder`)
-
-### 2. Train Models
-Choose a modeling script:
-
-| Script | Description |
+## 📦 Repository Map
+| Path | Purpose |
 | --- | --- |
-| `Training/RandomForest.py` | Single RF experiment on stacked NDVI/LST/type features. |
-| `Training/Training_Usable.py` | Month-wise RF training with QA masking + automatic prediction. |
-| `Training/CatBoost.py`, `Training/XGBoost.py`, `Training/CatBoost.py` | Alternative ensemble baselines. |
-| `Training/Transformer.py` | PyTorch super-resolution prototype (requires GPU). |
+| `Preprocessing/` | Scripts for MODIS/Landsat ingestion, clipping, resampling, QA filtering, statistics, and figure generation (e.g., `FullYearPro.py`, `LandsatPreprocessing.py`). |
+| `Preprocessing/ValidatlyProcessing/` | Smaller AOI validation utilities (`Validate.py`, `DataProcessing.py`). |
+| `LST_Tools/` | Shared helpers for raster IO, projections, NDVI, QA-aware prediction, metric plots, KDE density caching, etc. |
+| `Training/` | Model launchers (Random Forest, CatBoost, XGBoost, Transformer super-resolution prototype). |
+| `Visualization/` | High-level plotting scripts plus exported figures referenced below. |
+| `LICENSE` | Apache-2.0 plus patent notice from Anhui Agricultural University. |
 
-Typical run:
+## 🔁 End-to-End Workflow
+1. **Acquire & Stage** raw MODIS (HDF) and Landsat (B4/B5/B10) scenes plus land-cover products under `F:/MyProjects/MachineLearning/Data`.
+2. **Preprocess** using `Preprocessing/LandsatPreprocessing.py`, `ModisPreprocessing.py`, and `FullYearPro.py` to obtain NDVI/LST stacks, QA masks, and per-month tiles.
+3. **Train Monthly Models** with `Training/Training_Usable.py` (Random Forest baseline) or alternative learners (`CatBoost.py`, `XGBoost.py`, `Transformer.py`).
+4. **Forecast & Validate** via `Preprocessing/Predicting.py` and `Preprocessing/ValidatlyProcessing/Validate.py`.
+5. **Analyze & Visualize** KPIs using scripts such as `StatisticalAnalysis.py`, `StabilityAnaly.py`, `Visualization1.py`, etc.
+
+## 🧰 Core Modules
+- **`LST_Tools/Tool1.py`** – 1k+ lines of reusable raster utilities: HDF extraction, reprojection, mosaicking, clipping, resampling, QA handling (`preprocessing_QA_folder`), NDVI computation, predictor assembly (`predict_and_save`), and metric plotting (`model_accuracy`, `plot_mae/mse`, KDE caching).
+- **`LST_Tools/Tool2.py`** – Dataset orchestration (path presets, QA-based filtering, data loaders) for consistent training/test splits and batch inference.
+- **Preprocessing scripts** – Specialized tasks such as `FullYearPro.py` (full-year MODIS conversion & monthly bucketing), `StabilityAnaly.py` (cloudiness vs. R²), `StatisticalAnalysis.py` (daily cloud/LST logs), `To_shp.py` (boundary extraction), `YearTemAnalysis.py` (Meteostat weather vs. LST trends), and numerous plotting helpers (`Drawing*.py`, `Printing*.py`, `test*.py` templates).
+- **Training scripts** – Baseline Random Forest trainer with QA-masked per-month splits, GPU-enabled XGBoost, CatBoost, and an experimental Transformer super-resolution network.
+- **Visualization scripts** – Publish-ready panels comparing resolutions, land-cover statistics, and correlation heatmaps.
+
+## 🚀 Getting Started
+### Prerequisites
+- Python 3.11+, GDAL 3.x, rasterio, numpy, pandas, matplotlib/seaborn/plotly, shapely, scikit-learn, catboost, xgboost, cupy (CUDA), torch (for Transformer), meteostat, pillow.
+- GDAL/PROJ must be installed system-wide before `pip install rasterio`.
+- GPU acceleration is used by XGBoost (CUDA hist) and the Transformer; ensure `nvcc` + matching PyTorch build.
+
+### Environment Setup
 ```bash
-python Training/Training_Usable.py
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt  # create one or install modules manually
 ```
-Models are saved to `Data/Final_Data/Models/<year>/random_forest_model_MM.joblib`.
 
-### 3. Long-Term Reconstruction
-1. **Prepare monthly stacks**:
-   ```bash
-   python Preprocessing/FullYearPro.py
-   ```
-   - Extracts MODIS LST/QC from full-year HDF
-   - Reprojects, crops, rescales to 30 m
-   - Groups files per month (`TempData/LSTmouth`).
+### Data Configuration
+- The scripts assume the directory layout under `F:/MyProjects/MachineLearning/Data/...`. Update paths inside `LST_Tools/Tool1.py` & `Tool2.py` or parameterize the scripts to reflect your storage.
+- Ensure QA rasters end with `_QA_Usable.tif` to stay compatible with QA filtering logic.
 
-2. **Predict per month**:
-   ```bash
-   python Preprocessing/FullYearPre.py
-   ```
-   - Loads `<month>` model, stacks NDVI + monthly MODIS + land-cover
-   - Applies QA masks, fills predicted rasters in `FullYearPre/FinalData`.
+## 🧪 Running the Pipeline
+| Stage | Command | Notes |
+| --- | --- | --- |
+| Landsat preprocessing | `python Preprocessing/LandsatPreprocessing.py` | Groups B4/B5 files, computes NDVI, clips to AOI, prepares 30 m LST. |
+| MODIS preprocessing | `python Preprocessing/ModisPreprocessing.py` | Extracts MODIS LST, mosaics tiles, reprojects to UTM, resamples to 30 m proxies. |
+| Full-year MODIS prep | `python Preprocessing/FullYearPro.py` | Automates yearly ingest → mosaics → reprojection → resampling → monthly folders for both LST and QC. |
+| Feature generation | `python Preprocessing/FullYearPre.py` | Loads per-month NDVI/MODIS/type stacks, applies QA filtering, writes monthly prediction-ready rasters. |
+| Training (monthly RF) | `python Training/Training_Usable.py` | Trains/loads 12 Random Forest models, reports R², and triggers inference for each month. |
+| Alternative models | `python Training/CatBoost.py`, `Training/XGBoost.py`, `Training/Transformer.py` | Drop-in experimentation; update hyperparameters as needed. |
+| Prediction reruns | `python Preprocessing/Predicting.py` | Batch inference when models already exist; skips outputs already on disk. |
+| Validation slice | `python Preprocessing/ValidatlyProcessing/Validate.py` | Predicts on independent Jiangsu AOI, prints R², saves raster. |
+| Visualization | `python Visualization/Visualization1.py` (and others) | Generates comparison panels, scatter audits, rolling stats, and land-cover breakdowns. |
 
-### 4. Validation & Diagnostics
+### Monthly Forecast Storyboard
+![12-month forecast results](Visualization/12monthforecastresults.png)
 
-| Script | Purpose |
-| --- | --- |
-| `Preprocessing/ValidatlyProcessing/Validate.py` | Applies a trained model to validation tiles and reports R² vs. Landsat truth. |
-| `Preprocessing/CorrelationAnalysis.py` | Computes NDVI/LST/type correlation heatmaps (Plotly). |
-| `Preprocessing/LCErrorAnalysis.py` | Land-cover-specific error boxplots. |
-| `Preprocessing/YearTemAnalysis.py` | Compares reconstructed LST with Meteostat daily averages, includes regression scatterplots. |
-| `Preprocessing/CloudCoverageProcessing.py` + `coveranalys.py` | QA/cloud coverage statistics vs. LST trends. |
-| `Preprocessing/StabilityAnaly.py`, `StatisticalAnalysis.py` | Additional metrics and time-series summaries.
+Twelve stitched panels summarize the full-year LST dynamics and make it easy to spot seasonal anomalies once `Training/Training_Usable.py` finishes generating monthly rasters.
 
-### 5. Visualization & Reporting
-Use the scripts under `Visualization/` for publication-ready figures:
+## ✅ Quality & Validation
+- **QA-aware masking** – `Tool1.predict_and_save` and `Tool2.filter_data_based_on_qa` ensure training/prediction ignore cloudy pixels (QA == 0/2).
+- **Metrics** – `Tool1.model_accuracy`, `Tool1.print_model_R2`, `Preprocessing/StabilityAnaly.py`, and `LCErrorAnalysis.py` provide MAE/MSE/R² summaries and land-cover-specific error boxes.
+- **Weather cross-check** – `YearTemAnalysis.py` correlates Meteostat averages with predicted LST (+ scatter diagnostics with R² annotation).
+- **Density diagnostics** – KDE caching (`get_density_data`, `simple_gpu_kde`) accelerates repeated metric plotting for multiple models.
 
-- `Visualization/Visualization1.py`: multi-panel maps, scatter fit with R², land-use summaries.
-- `Visualization/Visualization2.py`: land-cover histogram/percentages.
-- Generated assets (e.g., `temperature_image.png`) are stored alongside scripts or inside `Data/Final_Data/Pictures`.
+### Resolution Enhancement Showcase
+![Resolution enhancement showcase](Visualization/Imageshowingimprovedresolution.png)
 
-## Validation & Diagnostics
-- **QA Filtering**: `Tool2.filter_data_based_on_qa` removes cloudy pixels before model training/prediction.
-- **Statistical Metrics**: `Tool1.model_accuracy`, `Tool1.plot_mae/mse`, GPU-accelerated KDE for residual density.
-- **External Validation**: `YearTemAnalysis.py` aligns LST with station temperature; linear regression results (slope, R²) exported as figures.
-- **Cloud Impact**: `coveranalys.py` visualizes how cloud coverage affects available samples and predicted LST per month.
+This comparison highlights how the trained models upsample MODIS-scale inputs into detail-rich 30 m products, reinforcing the benefits of the QA-filtered regression workflow.
 
-## Outputs
-- `Data/Final_Data/Models/<year>/` — serialized ML models.
-- `Data/Final_Data/Pictures/` — performance plots, cloud coverage charts, scatterplots.
-- `Data/Final_Data/Predict_Data/` & `FullYearPre/FinalData/` — GeoTIFF predictions (`Predict_LST_LSTYYYYMMDD.tif` or `Predict_LST_MM.tif`).
-- Validation rasters reside in `Validation_Data/Usable`.
+## ⚙️ Configuration Tips
+- Update `predict_path_set` and `path_set` inside `LST_Tools/Tool2.py` to point at your own NDVI/LST/type directories.
+- When porting to Linux, replace absolute drive letters and ensure GDAL can locate PROJ data.
+- Use `Tool1.group_landsat_files` whenever new Landsat scenes arrive to keep folder naming consistent for NDVI computation.
+- Scripts labeled `test*.py` under `Preprocessing/` are reproducible plotting templates—copy them when tailoring figures for reports.
 
-Document key metadata (CRS, resolution, QA thresholds) when sharing outputs to ensure reproducibility.
+## 📅 Suggested Next Steps
+1. Parameterize file paths via `.env` or YAML to remove hard-coded `F:/` strings.
+2. Add a `requirements.txt`/`environment.yml` describing exact library versions.
+3. Automate preprocessing/training with a single CLI entry point (e.g., `python -m pipelines.run all`).
+4. Extend validation to multiple AOIs and attach summary tables to README.
 
-## Troubleshooting & Tips
-- **Large Raster IO**: Enable GDAL VSI caching or process month-by-month to avoid memory spikes.
-- **Path Lengths**: Windows paths can exceed 260 chars—enable long path support or shorten base directories.
-- **GPU Optionality**: Guard `cupy`/CUDA imports if deploying on CPU-only machines.
-- **Missing Tiles**: `FullYearPro.py` logs when MODIS granules are absent; inspect `TempData` before proceeding.
-- **Data Consistency**: NDVI, MODIS, land-cover, and QA rasters must share projection and pixel grid after preprocessing.
+## 🛡️ License & Attribution
+- Code is released under the Apache License 2.0 **with** the additional patent notice contained in `LICENSE`. Commercial redistribution requires written permission from Anhui Agricultural University.
+- Cite the authorship note in `LICENSE` when sharing derived models or figures.
 
-## Roadmap
-1. Parameterize file paths via `.env` or YAML instead of hard-coded strings.
-2. Wrap workflows into CLI commands (e.g., `python -m lst.cli preprocess`).
-3. Add unit tests for preprocessing helpers and synthetic QA masks.
-4. Extend Transformer training to mini-batches of tiles with on-the-fly augmentation.
+---
 
-## License
-This project is released under the [MIT License](./LICENSE).
+🧭 **Need a quick start?** Run the preprocessing scripts in the order shown, train via `Training/Training_Usable.py`, and inspect `Visualization/12monthforecastresults.png` to confirm your setup end-to-end.
